@@ -5,7 +5,7 @@ Two small programs for keeping video as a folder of JPEG pictures and getting it
 * **mjpegstore** turns a progressive y4m stream into JPEG files, lists a set for an archiver, and writes a clip as a Matroska (MJPEG) stream or file.
 * **mjpegmount** mounts a set read-only (FUSE) and shows every clip as a real `.mkv` file, so a player or editor can open it and seek without anything being exported first.
 
-The pictures are the point. Every frame is made the same way (same quantization, same standard Huffman tables, a restart marker after every block of 16x16 pixels), so a part of the picture that does not change from one frame to the next comes out as the same bytes, aligned the same way. A compressor that looks back over the set (zstd, xz) can then match it. JPEG is lossy: the quality is in `specs.txt`.
+The pictures are the point. Every frame is made the same way (same quantization, same standard Huffman tables, a restart marker after every MCU, 16x16 pixels for 4:2:0), so a part of the picture that does not change from one frame to the next comes out as the same bytes, aligned the same way. A compressor that looks back over the set (zstd, xz) can then match it. JPEG is lossy: the quality is in `specs.txt`.
 
 ## Build
 
@@ -72,10 +72,20 @@ In the `ffmpeg` line, the options before `-i` are yours to choose: `-hide_banner
 ### Ingest options
 
 * `-j N` JPEG quality for a new `specs.txt` (default 90). Ignored when `specs.txt` exists, so every frame in a set matches.
-* `-R N` a restart marker after every N MCUs (an MCU is 16x16 pixels for 4:2:0). Default 1, the smallest pieces, which gave the smallest archives; 0 means one marker per row of blocks. Use the same `-R` for every clip of a set: it is not kept in `specs.txt`.
+* `-R N` a restart marker after every N MCUs (an MCU is 16x16 pixels for 4:2:0; table below). Default 1, the smallest pieces, which gave the smallest archives; 0 means one marker per row of blocks. Use the same `-R` for every clip of a set: it is not kept in `specs.txt`.
 * `-y` accept the settings detected from the stream header without asking.
 * `-t N` worker threads (default: number of CPUs).
 * `-p` with `-i -`, show a running frame count; `-q` quiet.
+
+The size of one MCU, the piece `-R` counts, follows the `sampling` in `specs.txt`:
+
+| sampling | MCU (pixels) | what it holds |
+|---|---|---|
+| `420` | 16x16 | four 8x8 luma blocks, one 8x8 block of each chroma |
+| `422` | 16x8 | two 8x8 luma blocks, one 8x8 block of each chroma |
+| `444` | 8x8 | one 8x8 block of each of luma and both chroma |
+
+With `-R 1` a restart marker follows every one of these, so a finer sampling gives smaller pieces and more markers.
 
 ### The list
 
@@ -117,7 +127,6 @@ These come from tests on anime footage while the tools were built:
 ## TODO
 
 * **10-bit support.** Today only 8-bit streams are stored. 10-bit is planned for the Debian forky stable release, whose libjpeg-turbo (3.1.3) has the higher-bit-depth JPEG support it needs.
-* **lossless support** same thing. waiting on forky. will implement as 1 row per restart marker which will save a bit on scrolling footage as the line moves but is usually the same 
 
 ## Questions and answers
 
